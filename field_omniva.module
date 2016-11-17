@@ -213,7 +213,7 @@ function field_omniva_field_widget_error($element, $error, $form, &$form_state) 
 function field_omniva_field_formatter_info() {
   return array(
     // Create Omniva listing in field.
-    'field_omniva_data' => array(
+    'field_omniva' => array(
       'label' => t('Omniva location data'),
       'field types' => array('field_omniva'),
     ),
@@ -228,18 +228,18 @@ function field_omniva_field_formatter_info() {
  */
 function field_omniva_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
   $element = array();
-  $place = field_omniva_placesbyid();
   $t_name = t('Omniva data');
   switch ($display['type']) {
     // This formatter simply outputs the field as text and with a color.
-    case 'field_omniva_data':
+    case 'field_omniva':
       foreach ($items as $delta => $item) {
+        $data = json_decode($item['data']);
         $element[$delta] = array(
           // See theme_html_tag().
           '#type' => 'html_tag',
           '#tag' => 'p',
           '#value' => "
-             <label> $t_name:</label> {$place[$item['zip']]['name']}
+          <label> $t_name:</label> {$data->NAME}
           ",
         );
       }
