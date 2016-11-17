@@ -160,7 +160,7 @@ function _field_omniva_data_id_wrapper_validate($element, &$form_state, $form) {
           if (count($field_parents) > 0) {
             $form_state['values'][$field_parents[0]][$field_name][$language][0]['data'] = json_encode($data[$zip]['data']);
           } else {
-            $form_state['values'][$field_parents[0]][$field_name][$language][0]['data'] = json_encode($data[$zip]['data']);
+            $form_state['values'][$field_name][$language][0]['data'] = json_encode($data[$zip]['data']);
           }
         }
       } else {
