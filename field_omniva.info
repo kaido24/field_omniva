@@ -1,0 +1,4 @@
+name = Omniva field
+description = selelectable list of Omniva package terminal and office locations
+core = 7.x
+

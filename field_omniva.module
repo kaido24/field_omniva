@@ -1,0 +1,333 @@
+<?php
+
+/***************************************************************
+ * Omniva Field
+ ***************************************************************/
+
+/**
+ * Implements hook_field_info().
+ *
+ * Provides the description of the field.
+ */
+function field_omniva_field_info() {
+  return array(
+    'field_omniva' => array(
+      'label' => t('List (Omniva delivery locations)'),
+      'description' => t('Omniva terminal and post office locations.'),
+      'default_widget' => 'field_omniva_select',
+      'default_formatter' => 'field_omniva',
+      'settings' => array(
+        'countries' => array('EE'),
+        'location_types' => array(),
+      ),
+     'property_type' => 'zip',
+     'property_callback' => array('_field_omniva_zip_code_property_callback'),
+    ),
+  );
+}
+/**
+ * Callback to alter the property info of device id fields.
+ *
+ * @see device_id_field_info().
+ */
+function _field_omniva_zip_code_property_callback(&$info, $entity_type, $field, $instance, $field_type) {
+  $name = $field['field_name'];
+  $property = &$info[$entity_type]['bundles'][$instance['bundle']]['properties'][$name];
+
+  $property['type'] = ($field['cardinality'] != 1) ? 'list<zip>' : 'zip';
+  $property['getter callback'] = 'entity_metadata_field_verbatim_get';
+  $property['setter callback'] = 'entity_metadata_field_verbatim_set';
+  $property['property info'] = field_omniva_zip_code_property_info();
+
+  unset($property['query callback']);
+}
+/**
+ * Defines info for the properties of the zip code field data structure.
+ */
+function field_omniva_zip_code_property_info($name = NULL) {
+  // Build an array of basic property information for the zip code field.
+  $properties = array(
+    'zip' => array(
+      'label' => t('Postal code'),
+    ),
+    'data' => array(
+      'label' => t('Location data json format'),
+    )
+  );
+}
+/**
+ * Implements hook_field_settings_form().
+ */
+function field_omniva_field_settings_form($field, $instance, $has_data) {
+  $form = array();
+  $settings = &$field['settings'];
+  $form['countries'] = array(
+    '#type' => 'checkboxes',
+    '#options' => field_omniva_countries_list(),
+    '#default_value' => $settings['countries'],
+    '#title' => t('Countries'),
+    '#required' => TRUE,
+    '#multiple' => TRUE,
+    '#description' => t('Which countries would you like to show.'),
+  );
+  $form['location_types'] = array(
+    '#type' => 'checkboxes',
+    '#options' => array('PT' => 'Parcel terminals', 'PO' => 'Post offices'),
+    '#default_value' =>  $settings['location_types'],
+    '#title' => t('Pickup locations'),
+    '#required' => TRUE,
+    '#description' => t('Select package locations.'),
+  );
+  return $form;
+}
+
+/**
+ * Implements hook_field_is_empty().
+ *
+ * hook_field_is_emtpy() is where Drupal asks us if this field is empty.
+ * Return TRUE if it does not contain data, FALSE if it does. This lets
+ * the form API flag an error when required fields are empty.
+ */
+function field_omniva_field_is_empty($item, $field) {
+  return empty($item['zip']);
+}
+
+/**
+ * Implements hook_field_widget_info().
+ *
+ * @see field_omniva_field_widget_form()
+ */
+function field_omniva_field_widget_info() {
+  return array(
+    'field_omniva_select' => array(
+      'label' => t('Omniva package pickup location list'),
+      'field types' => array('field_omniva'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_form().
+ *
+ * hook_widget_form() is where Drupal tells us to create form elements for
+ * our field's widget.
+ */
+function field_omniva_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $value = isset($items[$delta]['zip']) ? $items[$delta]['zip'] : '';
+  $countries = $field['settings']['countries'];
+  $location_types = $field['settings']['location_types'];
+  $widget = $element;
+  $widget['#delta'] = $delta;
+  switch ($instance['widget']['type']) {
+    case 'field_omniva_select':
+      $widget += array(
+        '#type' => 'select',
+        '#options' => field_omniva_place_selection($countries, $location_types),
+        '#default_value' => $value,
+        '#element_validate' => array('_field_omniva_data_id_wrapper_validate'),
+      );
+      break;
+  }
+
+  $element['zip'] = $widget;
+//  $element['data'] = array('#type'=> 'value', '#default_value' => 'hello');
+  return $element;
+}
+
+function _field_omniva_data_id_wrapper_validate($element, &$form_state, $form) {
+  //This function is also called when submitting the field
+  //configuration form.  If so, skip validation since it
+  //won't work anyway
+  if ($form_state['complete form']['#form_id'] == 'field_ui_field_edit_form') {
+    return;
+  }
+  $values = $form_state['values'];
+  $language = $element['#language'];
+  $field_name = $element['#field_name'];
+  $field_parents = $element['#field_parents'];
+  $parents = $element['#parents'];
+  if (empty($field_parents)) {
+    $field_data = $values[$field_name][$language];
+  } else {
+    $field_data = $values[$field_parents[0]][$field_name][$language];
+  }
+  foreach ($field_data as $delta => $item) {
+    if (is_array($item)) {
+      if (array_key_exists('zip', $item)) {
+        $data = field_omniva_placesbyid();
+        $zip = (int) $item['zip'];
+        if (isset($data[$zip])) {
+          if (count($field_parents) > 0) {
+            $form_state['values'][$field_parents[0]][$field_name][$language][0]['data'] = json_encode($data[$zip]['data']);
+          } else {
+            $form_state['values'][$field_parents[0]][$field_name][$language][0]['data'] = json_encode($data[$zip]['data']);
+          }
+        }
+      } else {
+       form_set_error($field_name, t('Your device ID doesn\'t match a valid format.  Check
+            the device ID, verify it\'s correct, and type/scan it again.'));
+      }
+    }
+  }
+}
+/**
+ * Implements hook_field_validate().
+ * Validate the field content.
+ * @see field_example_field_widget_error()
+ */
+function field_omniva_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+  foreach ($items as $delta => $item) {
+    if (!empty($item['zip'])) {
+      if (!is_numeric($item['zip'])) {
+        $errors[$field['field_name']][$langcode][$delta][] = array(
+          'error' => 'field_zip_invalid',
+          'message' => t('You must select something.'),
+        );
+      }
+    }
+  }
+}
+/**
+ * Implements hook_field_widget_error().
+ *
+ * hook_field_widget_error() lets us figure out what to do with errors
+ * we might have generated in hook_field_validate(). Generally, we'll just
+ * call form_error().
+ *
+ * @see field_example_field_validate()
+ * @see form_error()
+ */
+function field_omniva_field_widget_error($element, $error, $form, &$form_state) {
+  switch ($error['error']) {
+    case 'field_omniva_invalid':
+      form_error($element, $error['message']);
+      break;
+  }
+}
+/**
+ * Implements hook_field_formatter_info().
+ *
+ * I could define more that one display.
+ * @see field_example_field_formatter_view()
+ */
+function field_omniva_field_formatter_info() {
+  return array(
+    // Create Omniva listing in field.
+    'field_omniva_data' => array(
+      'label' => t('Omniva location data'),
+      'field types' => array('field_omniva'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ *
+ *
+ * @see field_example_field_formatter_info()
+ */
+function field_omniva_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  $place = field_omniva_placesbyid();
+  $t_name = t('Omniva data');
+  switch ($display['type']) {
+    // This formatter simply outputs the field as text and with a color.
+    case 'field_omniva_data':
+      foreach ($items as $delta => $item) {
+        $element[$delta] = array(
+          // See theme_html_tag().
+          '#type' => 'html_tag',
+          '#tag' => 'p',
+          '#value' => "
+             <label> $t_name:</label> {$place[$item['zip']]['name']}
+          ",
+        );
+      }
+      break;
+  }
+
+  return $element;
+}
+
+function field_omniva_countries_list() {
+  $places = field_omniva_json_to_array();
+  foreach ($places as $zip => $place) {
+    $out[$place['A0_NAME']] = $place['A0_NAME'];
+  }
+  return $out;
+}
+/**
+ * Implements hook_cron();
+ */
+function field_omniva_cron() {
+  field_omniva_rebuild_list();
+}
+/**
+ * Build and rebuild list for smartpost places info.
+ */
+function field_omniva_rebuild_list() {
+  $uri = field_omniva_filepath_uri();
+  if (!file_exists($uri)) {
+    drupal_mkdir($uri);
+  }
+  if (file_exists($uri)) {
+    $omniva_local = $uri . '/locations.json';
+    $data = drupal_http_request('https://www.omniva.ee/locations.json');
+    file_unmanaged_save_data($data->data, $omniva_local, FILE_EXISTS_REPLACE);
+  }
+}
+
+/**
+ * Create filepath.
+ */
+function field_omniva_filepath_uri() {
+  return variable_get('file_public_path', conf_path()) . '/omniva';
+}
+
+/**
+ *Create selectable grouped menu for places.
+ */
+function field_omniva_place_selection($countries = array(), $location_types = array()) {
+ $places = field_omniva_json_to_array();
+ $out = array("" => t("Select"));
+ $countries = array_values($countries);
+ $location_types = array_values($location_types);
+ foreach ($places as $place) {
+   $type = '';
+   if($place['TYPE'] == 0) {
+     $type = 'PT';
+   } else if ($place['TYPE']) {
+     $type = 'PO';
+   }
+   if (in_array($place['A0_NAME'], $countries, TRUE) && in_array($type, $location_types, TRUE)) {
+     $out[$place['A1_NAME']][$place['ZIP']] = $place['NAME'];
+   } else {
+    continue;
+   }
+ }
+ return $out;
+}
+
+/**
+ * Create array from post24.json data.
+ */
+function field_omniva_json_to_array() {
+  $post24_info = file_get_contents(field_omniva_filepath_uri() . '/locations.json');
+  return drupal_json_decode($post24_info);
+}
+
+/**
+ * Create array grouped by zip.
+ */
+function field_omniva_placesbyid() {
+  $places = field_omniva_json_to_array();
+  foreach ($places as $place) {
+    $output[$place['ZIP']] = array(
+      'name' => $place['NAME'],
+      'city' => $place['A1_NAME'],
+      'data' => $place,
+    );
+  }
+  return $output;
+}
+

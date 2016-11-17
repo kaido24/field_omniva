@@ -1,0 +1,22 @@
+<?php
+
+function field_omniva_field_schema($field) {
+  if ($field['type'] == 'field_omniva') {
+    return array(
+      'columns' => array(
+        'zip' => array(
+          'description' => 'Zip code.',
+          'type' => 'int',
+          'not null' => TRUE,
+        ),
+        'data' => array(
+          'description' => 'A serialized array of location data.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ),
+      ),
+    );
+  }
+}
+
