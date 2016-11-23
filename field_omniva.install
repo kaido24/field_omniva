@@ -19,4 +19,21 @@ function field_omniva_field_schema($field) {
     );
   }
 }
+/**
+* Implements hook_install().
+*/
+function field_omniva_install() {
+    $uri = 'public://omniva';
+    file_prepare_directory($uri, FILE_CREATE_DIRECTORY);
+    $local_copy = $uri . '/locations.json';
+    $data = drupal_http_request('https://omniva.ee/locations.json');
+    file_unmanaged_save_data($data->data, $local_copy, FILE_EXISTS_REPLACE);
+}
 
+/**
+* Implements hook_install().
+*/
+function field_omniva_uninstall() {
+  $uri = 'public://omniva';
+  file_unmanaged_delete_recursive($uri);
+}

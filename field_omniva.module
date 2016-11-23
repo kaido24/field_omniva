@@ -266,22 +266,16 @@ function field_omniva_cron() {
  * Build and rebuild list for smartpost places info.
  */
 function field_omniva_rebuild_list() {
-  $uri = field_omniva_filepath_uri();
-  if (!file_exists($uri)) {
-    drupal_mkdir($uri);
-  }
-  if (file_exists($uri)) {
-    $omniva_local = $uri . '/locations.json';
-    $data = drupal_http_request('https://www.omniva.ee/locations.json');
-    file_unmanaged_save_data($data->data, $omniva_local, FILE_EXISTS_REPLACE);
-  }
+  $omniva_local = $uri . 'public://omniva/locations.json';
+  $data = drupal_http_request('https://www.omniva.ee/locations.json');
+  file_unmanaged_save_data($data->data, $omniva_local, FILE_EXISTS_REPLACE);
 }
 
 /**
  * Create filepath.
  */
 function field_omniva_filepath_uri() {
-  return variable_get('file_public_path', conf_path()) . '/omniva';
+  return 'public://omniva';
 }
 
 /**
@@ -312,7 +306,7 @@ function field_omniva_place_selection($countries = array(), $location_types = ar
  * Create array from post24.json data.
  */
 function field_omniva_json_to_array() {
-  $post24_info = file_get_contents(field_omniva_filepath_uri() . '/locations.json');
+  $post24_info = file_get_contents('public://omniva/locations.json');
   return drupal_json_decode($post24_info);
 }
 
